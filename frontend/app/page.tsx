@@ -174,6 +174,19 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [dateFilter, setDateFilter] = useState<"today" | "yesterday">("today");
 
+  // Debug: Log session to see what's available
+  useEffect(() => {
+    if (session?.user) {
+      console.log("=== SESSION USER DEBUG ===");
+      console.log("Full session.user:", session.user);
+      console.log("email:", session.user.email);
+      console.log("name:", session.user.name);
+      console.log("login:", (session.user as any).login);
+      console.log("image:", session.user.image);
+      console.log("========================");
+    }
+  }, [session]);
+
   // Get user identifier (email or name for GitHub users without email)
   const userIdentifier = session?.user?.email || session?.user?.name || (session?.user as any)?.login || null;
 

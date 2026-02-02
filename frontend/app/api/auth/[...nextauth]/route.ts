@@ -28,18 +28,42 @@ const handler = NextAuth({
             }
         })
     ],
+    session: {
+        strategy: "jwt",
+    },
     callbacks: {
-        async jwt({ token, account, profile }) {
-            // When user signs in, add GitHub login to token
-            if (account?.provider === "github" && profile) {
-                token.login = (profile as any).login; // GitHub username
+        async jwt({ token, account, profile, user }) {
+            // When user first signs in
+            if (account && profile) {
+                console.log("JWT Callback - Provider:", account.provider);
+                console.log("JWT Callback - Profile:", profile);
+
+                // GitHub specific handling
+                if (account.provider === "github") {
+                    token.login = (profile as any).login;
+                    token.email = token.email || (profile as any).email;
+                    token.name = token.name || (profile as any).name || (profile as any).login;
+                    console.log("JWT Callback - GitHub login:", token.login);
+                }
             }
             return token;
         },
         async session({ session, token }) {
-            // Add login to session from token
-            if (token.login) {
-                (session.user as any).login = token.login;
+            console.log("Session Callback - Token:", token);
+
+            // Add all relevant fields to session
+            if (session.user) {
+                if (token.login) {
+                    (session.user as any).login = token.login;
+                }
+                if (token.email) {
+                    session.user.email = token.email as string;
+                }
+                if (token.name) {
+                    session.user.name = token.name as string;
+                }
+
+                console.log("Session Callback - Final session.user:", session.user);
             }
             return session;
         }
