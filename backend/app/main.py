@@ -65,7 +65,8 @@ def get_user_watchlist_ref(app_state: AppState, user_email: Optional[str]) -> Li
             app_state.users[user_email] = UserProfile()
         return app_state.users[user_email].watchlist
     else:
-        return app_state.watchlist
+        # Return empty list for guests to ensure isolation (frontend handles local storage)
+        return []
 
 # --- Job Function ---
 def run_analysis_job():
