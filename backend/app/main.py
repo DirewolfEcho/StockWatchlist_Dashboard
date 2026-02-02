@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Body, Header, Query
+from fastapi import FastAPI, HTTPException, Body, Header, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional, Dict
 import json
@@ -128,14 +128,25 @@ def read_root():
     return {"message": "Stock Analyzer API is running"}
 
 @app.get("/stocks", response_model=List[Stock])
-def get_watchlist(x_user_email: Optional[str] = Header(None), user_email: Optional[str] = Query(None)):
+def get_watchlist(response: Response, x_user_email: Optional[str] = Header(None), user_email: Optional[str] = Query(None)):
+    # Reload data to ensure freshness in multi-worker env
+    global app_state
+    app_state = load_data()
+    
     final_email = x_user_email or user_email
+    response.headers["X-Debug-User"] = str(final_email)
     return get_user_watchlist_ref(app_state, final_email)
 
 @app.post("/stocks", response_model=Stock)
-def add_stock(stock_base: StockBase, x_user_email: Optional[str] = Header(None), user_email: Optional[str] = Query(None)):
+def add_stock(response: Response, stock_base: StockBase, x_user_email: Optional[str] = Header(None), user_email: Optional[str] = Query(None)):
+    global app_state
+    app_state = load_data()
+    
     final_email = x_user_email or user_email
+    response.headers["X-Debug-User"] = str(final_email)
+    
     target_list = get_user_watchlist_ref(app_state, final_email)
+
     
     symbol = stock_base.symbol.strip().upper()
     market = stock_base.market.upper()
