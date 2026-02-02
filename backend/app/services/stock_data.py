@@ -350,6 +350,56 @@ def get_intraday_chart(symbol: str, market: str) -> list:
     Returns list of {'time': str, 'price': float}
     """
     try:
+        # 1. Try Tencent Finance (More stable for deployment environments)
+        import requests
+        
+        qt_symbol = symbol
+        if market.upper() == 'HK':
+            # 00700 -> hk00700
+            qt_symbol = f"hk{symbol.lstrip('0').zfill(5)}"
+        elif market.upper() == 'US':
+            # AAPL -> usAAPL
+            qt_symbol = f"us{symbol.upper()}"
+            
+        # Tencent Minute Data API
+        url = f"http://web.ifzq.gtimg.cn/appstock/app/minute/query?code={qt_symbol}"
+        res = requests.get(url, timeout=3)
+        
+        chart_data = []
+        if res.status_code == 200:
+            data = res.json()
+            # Navigate path: data -> [symbol] -> data -> data
+            # Response structure: {"data": {"hk00700": {"data": {"data": ["0930 380.20 100 ..."]}}}}
+            if 'data' in data and qt_symbol in data['data']:
+                inner_data = data['data'][qt_symbol].get('data', {}).get('data', [])
+                
+                # Sample logic: Tencent returns 1-min data (Format: "HHMM PRICE VOLUME...")
+                # We want to downsample to ~15min or similar to reduce points, or just return all?
+                # Frontend handles path fine regardless of count usually.
+                # Let's return all points but format time.
+                
+                for point in inner_data:
+                    parts = point.split(' ')
+                    if len(parts) >= 2:
+                        raw_time = parts[0] # "0930"
+                        price = float(parts[1])
+                        
+                        # Format HH:MM
+                        formatted_time = f"{raw_time[:2]}:{raw_time[2:]}"
+                        
+                        chart_data.append({
+                            "time": formatted_time,
+                            "price": price
+                        })
+                
+                # If we got data, return it. If empty (e.g. pre-market and no data?), fallback.
+                if chart_data:
+                    # Optional: Downsample if too many points? 
+                    # Tencent gives ALL minutes. That's ~330 points. 
+                    # Let's take every 5th point to mimic 5m interval roughly
+                    return chart_data[::5]
+
+        # 2. Fallback to yfinance
         import yfinance as yf
         ticker_symbol = symbol
         if market.upper() == 'HK':
@@ -362,15 +412,13 @@ def get_intraday_chart(symbol: str, market: str) -> list:
         hist = ticker.history(period="1d", interval="15m")
         
         if hist.empty:
-            # Fallback to 5d history if 1d is empty (e.g. weekend/market closed)
+            # Fallback to 5d history if 1d is empty
             hist = ticker.history(period="5d", interval="60m")
             
-        chart_data = []
         for index, row in hist.iterrows():
             # Format index to string HH:MM
             time_str = index.strftime("%H:%M") if hasattr(index, 'strftime') else str(index)
-            # If multi-day fallback, maybe include Date?
-            if len(hist) > 50: # Likely 5 days
+            if len(hist) > 50: 
                  time_str = index.strftime("%m-%d %H:%M")
                  
             chart_data.append({
