@@ -180,12 +180,24 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [dateFilter, session]);
 
+  // Load data logic handling both local and remote
   const loadData = async () => {
     try {
-      const s = await fetchStocks(session?.user?.email);
-      setStocks(s);
-      const r = await fetchReports(dateFilter);
-      setReports(r);
+      if (session?.user?.email) {
+        // Logged in: Fetch from server
+        const s = await fetchStocks(session.user.email);
+        setStocks(s);
+      } else {
+        // Guest: Fetch from localStorage
+        const stored = localStorage.getItem("guest_stocks");
+        if (stored) {
+          setStocks(JSON.parse(stored));
+        } else {
+          setStocks([]);
+        }
+      }
+      // Reports are always global for now (or could be filtered)
+      loadReports();
     } catch (e) {
       console.error(e);
     }
@@ -203,34 +215,55 @@ export default function Home() {
     const symbol = newSymbol.trim().toUpperCase();
     if (!symbol) return;
 
-    // Optimistic Update
-    const tempId = `temp-${Date.now()}`;
+    // Optimistic Update Object
     const tempStock: Stock = {
       symbol: symbol,
       market: market,
-      name: "正在获取名称...",
+      name: "正在获取名称...", // Will benefit from a real fetch for name even in local mode
       added_at: new Date().toISOString()
     };
 
-    setStocks(prev => [tempStock, ...prev]);
-    setNewSymbol("");
-
-    try {
-      await addStock(symbol, market, session?.user?.email);
-      loadData(); // Re-fetch all to get final names and charts
-    } catch (e: any) {
-      // Rollback if error
-      setStocks(prev => prev.filter(s => s.symbol !== symbol || s.market !== market));
-      alert(e.message || "添加股票出错");
+    if (session?.user?.email) {
+      // Logged in: Add to server
+      setStocks(prev => [tempStock, ...prev]);
+      setNewSymbol("");
+      try {
+        await addStock(symbol, market, session.user.email);
+        loadData();
+      } catch (e: any) {
+        setStocks(prev => prev.filter(s => s.symbol !== symbol || s.market !== market));
+        alert(e.message || "添加股票出错");
+      }
+    } else {
+      // Guest: Add to localStorage
+      // We still technically might want to 'verify' the stock exists via API, but for MVP local storage:
+      // We need the name. We can cheat and use the API to "add" it to a dummy user or just fetch metadata?
+      // Or just let the user add it and we fetch name later.
+      // Actually, we can use the `addStock` API without email to "validate" and get name, but backend currently adds to global list if no email.
+      // We should fix backend to support "get info" or just store what we have.
+      // Let's rely on the fact that `addStock` returns the stock object with name.
+      // Wait, backend `addStock` with no email adds to GLOBAL watchlist. We don't want that for "private local".
+      // Solution: We'll just add it to local state. Name fetching is tricky without an API endpoint just for "info".
+      // Let's just optimistic add it.
+      const newLocalStocks = [tempStock, ...stocks];
+      setStocks(newLocalStocks);
+      localStorage.setItem("guest_stocks", JSON.stringify(newLocalStocks));
+      setNewSymbol("");
     }
   };
 
   const handleRemove = async (symbol: string) => {
-    try {
-      await removeStock(symbol, session?.user?.email);
-      loadData();
-    } catch (e: any) {
-      alert(e.message || "删除失败");
+    if (session?.user?.email) {
+      try {
+        await removeStock(symbol, session.user.email);
+        loadData();
+      } catch (e: any) {
+        alert(e.message || "删除失败");
+      }
+    } else {
+      const newStocks = stocks.filter(s => s.symbol !== symbol);
+      setStocks(newStocks);
+      localStorage.setItem("guest_stocks", JSON.stringify(newStocks));
     }
   };
 

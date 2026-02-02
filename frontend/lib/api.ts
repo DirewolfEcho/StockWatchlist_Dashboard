@@ -15,6 +15,7 @@ export const fetchStocks = async (email?: string | null) => {
     return res.json();
 };
 
+
 export const addStock = async (symbol: string, market: string, email?: string | null) => {
     const res = await fetch(`${API_URL}/stocks`, {
         method: "POST",
