@@ -1,139 +1,26 @@
-from fastapi import FastAPI, HTTPException, Body, Header
-from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional, Dict
-import json
-import os
-from datetime import datetime
-from app.models import Stock, StockBase, AppState, AnalysisReport, TimerSettings, UserProfile
-from app.services.analysis import generate_stock_report
-from app.services.scheduler import start_scheduler, set_daily_job
-import threading
+from fastapi import FastAPI, HTTPException, Body, Header, Query
 
-app = FastAPI()
+# ... (rest of imports)
 
-# CORS config allowing frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for simplicity in deployment
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ... (app setup)
 
-DATA_FILE = "data.json"
-
-# In-memory retrieval with persistence
-def load_data() -> AppState:
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
-            try:
-                data = json.load(f)
-                # Parse datetimes back (Global Watchlist)
-                for stock in data.get("watchlist", []):
-                    if isinstance(stock.get("added_at"), str):
-                        stock["added_at"] = datetime.fromisoformat(stock["added_at"])
-                
-                # Parse datetimes back (Users Watchlists)
-                if "users" in data and isinstance(data["users"], dict):
-                    for email, profile in data["users"].items():
-                        if "watchlist" in profile:
-                            for stock in profile["watchlist"]:
-                                if isinstance(stock.get("added_at"), str):
-                                    stock["added_at"] = datetime.fromisoformat(stock["added_at"])
-                                    
-                # Parse datetimes back (Reports)
-                for report in data.get("reports", []):
-                    if isinstance(report.get("generated_at"), str):
-                        report["generated_at"] = datetime.fromisoformat(report["generated_at"])
-                        
-                return AppState(**data)
-            except Exception as e:
-                print(f"Error loading data: {e}")
-                return AppState()
-    return AppState()
-
-def save_data(state: AppState):
-    with open(DATA_FILE, "w") as f:
-        f.write(state.model_dump_json())
-
-app_state = load_data()
-
-# Helper to get the correct watchlist
-def get_user_watchlist_ref(app_state: AppState, user_email: Optional[str]) -> List[Stock]:
-    if user_email:
-        if user_email not in app_state.users:
-            app_state.users[user_email] = UserProfile()
-        return app_state.users[user_email].watchlist
-    else:
-        # Return empty list for guests to ensure isolation (frontend handles local storage)
-        return []
-
-# --- Job Function ---
-def run_analysis_job():
-    print("Running analysis job...")
-    from datetime import timedelta
-    
-    today = datetime.now().date()
-    yesterday = today - timedelta(days=1)
-    
-    # Collect all unique stocks from all users + guest
-    unique_stocks = {}
-    
-    # helper
-    def add_stocks(s_list):
-        for s in s_list:
-            key = (s.symbol, s.market)
-            if key not in unique_stocks:
-                unique_stocks[key] = s
-                
-    add_stocks(app_state.watchlist)
-    for user_profile in app_state.users.values():
-        add_stocks(user_profile.watchlist)
-        
-    for stock in unique_stocks.values():
-        print(f"Analyzing {stock.symbol}...")
-        try:
-            report = generate_stock_report(stock.symbol, stock.market)
-            
-            # Remove existing report for this stock from today
-            app_state.reports = [
-                r for r in app_state.reports 
-                if not (r.stock_symbol == stock.symbol and r.generated_at.date() == today)
-            ]
-            
-            # Add new report
-            app_state.reports.insert(0, report)
-        except Exception as e:
-            print(f"Analysis failed for {stock.symbol}: {e}")
-    
-    # Clean up: only keep reports from today and yesterday
-    app_state.reports = [
-        r for r in app_state.reports
-        if r.generated_at.date() >= yesterday
-    ]
-    
-    save_data(app_state)
-    print("Analysis job finished.")
+# ... (get_user_watchlist_ref)
 
 # --- Routes ---
 
-@app.on_event("startup")
-def startup_event():
-    start_scheduler()
-    if app_state.timer:
-        set_daily_job(run_analysis_job, app_state.timer)
+# ... (startup)
 
-@app.get("/")
-def read_root():
-    return {"message": "Stock Analyzer API is running"}
+# ... (root)
 
 @app.get("/stocks", response_model=List[Stock])
-def get_watchlist(x_user_email: Optional[str] = Header(None)):
-    return get_user_watchlist_ref(app_state, x_user_email)
+def get_watchlist(x_user_email: Optional[str] = Header(None), user_email: Optional[str] = Query(None)):
+    final_email = x_user_email or user_email
+    return get_user_watchlist_ref(app_state, final_email)
 
 @app.post("/stocks", response_model=Stock)
-def add_stock(stock_base: StockBase, x_user_email: Optional[str] = Header(None)):
-    target_list = get_user_watchlist_ref(app_state, x_user_email)
+def add_stock(stock_base: StockBase, x_user_email: Optional[str] = Header(None), user_email: Optional[str] = Query(None)):
+    final_email = x_user_email or user_email
+    target_list = get_user_watchlist_ref(app_state, final_email)
     
     symbol = stock_base.symbol.strip().upper()
     market = stock_base.market.upper()
@@ -170,15 +57,12 @@ def add_stock(stock_base: StockBase, x_user_email: Optional[str] = Header(None))
     save_data(app_state)
     return new_stock
 
-@app.get("/stocks/{market}/{symbol}/chart")
-def get_chart(market: str, symbol: str):
-    from app.services.stock_data import get_intraday_chart
-    chart_data = get_intraday_chart(symbol.upper(), market.upper())
-    return chart_data
+# ... (get_chart)
 
 @app.delete("/stocks/{symbol}")
-def remove_stock(symbol: str, x_user_email: Optional[str] = Header(None)):
-    target_list = get_user_watchlist_ref(app_state, x_user_email)
+def remove_stock(symbol: str, x_user_email: Optional[str] = Header(None), user_email: Optional[str] = Query(None)):
+    final_email = x_user_email or user_email
+    target_list = get_user_watchlist_ref(app_state, final_email)
     
     symbol_upper = symbol.upper()
     
@@ -194,6 +78,7 @@ def remove_stock(symbol: str, x_user_email: Optional[str] = Header(None)):
         save_data(app_state)
         
     return {"status": "removed"}
+
 
 @app.get("/reports", response_model=List[AnalysisReport])
 def get_reports(date_filter: str = "today"):

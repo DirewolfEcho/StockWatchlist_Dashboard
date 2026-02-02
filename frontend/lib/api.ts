@@ -8,9 +8,14 @@ const getHeaders = (email?: string | null) => {
 
 export const fetchStocks = async (email?: string | null) => {
     const headers: Record<string, string> = {};
-    if (email) headers["X-User-Email"] = email;
+    let url = `${API_URL}/stocks`;
 
-    const res = await fetch(`${API_URL}/stocks`, {
+    if (email) {
+        headers["X-User-Email"] = email;
+        url += `?user_email=${encodeURIComponent(email)}`;
+    }
+
+    const res = await fetch(url, {
         headers,
         cache: "no-store",
     });
@@ -19,30 +24,33 @@ export const fetchStocks = async (email?: string | null) => {
 };
 
 
-
 export const addStock = async (symbol: string, market: string, email?: string | null) => {
-    const res = await fetch(`${API_URL}/stocks`, {
+    let url = `${API_URL}/stocks`;
+    if (email) {
+        url += `?user_email=${encodeURIComponent(email)}`;
+    }
+
+    const res = await fetch(url, {
         method: "POST",
         headers: getHeaders(email),
         body: JSON.stringify({ symbol, market }),
     });
-    if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.detail || "Failed to add stock");
-    }
+    if (!res.ok) throw new Error(await res.text());
     return res.json();
 };
 
 export const removeStock = async (symbol: string, email?: string | null) => {
-    // Delete usually doesn't need content-type, but needs User Email
-    const headers: Record<string, string> = {};
-    if (email) headers["X-User-Email"] = email;
+    const headers = getHeaders(email);
+    let url = `${API_URL}/stocks/${symbol}`;
+    if (email) {
+        url += `?user_email=${encodeURIComponent(email)}`;
+    }
 
-    const res = await fetch(`${API_URL}/stocks/${symbol}`, {
+    const res = await fetch(url, {
         method: "DELETE",
         headers: headers
     });
-    if (!res.ok) throw new Error("Failed to remove stock");
+    if (!res.ok) throw new Error(await res.text());
     return res.json();
 };
 
