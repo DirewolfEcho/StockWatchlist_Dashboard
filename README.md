@@ -41,3 +41,4 @@ A full-stack application to track HK/US stocks, fetch daily news, and generate A
 *   **Scheduler**: Set a daily time (HH:MM) for analysis.
 *   **Manual Trigger**: Click "Run Analysis Now" for immediate results.
 *   **Reports**: View AI-generated summaries including price trends, news analysis, and recommendations.
+# Vercel Deploy Trigger
