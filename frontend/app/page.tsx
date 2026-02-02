@@ -175,7 +175,7 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState<"today" | "yesterday">("today");
 
   // Get user identifier (email or name for GitHub users without email)
-  const userIdentifier = session?.user?.email || session?.user?.name || null;
+  const userIdentifier = session?.user?.email || session?.user?.name || (session?.user as any)?.login || null;
 
   useEffect(() => {
     if (status === "loading") return;

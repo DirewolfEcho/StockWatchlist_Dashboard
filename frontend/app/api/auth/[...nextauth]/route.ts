@@ -28,6 +28,22 @@ const handler = NextAuth({
             }
         })
     ],
+    callbacks: {
+        async jwt({ token, account, profile }) {
+            // When user signs in, add GitHub login to token
+            if (account?.provider === "github" && profile) {
+                token.login = (profile as any).login; // GitHub username
+            }
+            return token;
+        },
+        async session({ session, token }) {
+            // Add login to session from token
+            if (token.login) {
+                (session.user as any).login = token.login;
+            }
+            return session;
+        }
+    },
     // 必须配置 secret 才能在生产环境运行，开发环境 NextAuth 会自动处理警告，但在 production 会报错
     secret: process.env.NEXTAUTH_SECRET || "dev-secret-123",
 })
