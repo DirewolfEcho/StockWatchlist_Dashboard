@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const getHeaders = (email?: string | null) => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
