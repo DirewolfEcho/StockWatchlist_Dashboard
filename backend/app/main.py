@@ -145,13 +145,6 @@ def add_stock(response: Response, stock_base: StockBase, x_user_email: Optional[
     final_email = x_user_email or user_email
     response.headers["X-Debug-User"] = str(final_email)
     
-    # Require user email for persistent storage
-    if not final_email:
-        raise HTTPException(
-            status_code=401, 
-            detail="需要登录邮箱才能保存股票。请使用提供邮箱的账户登录（如 Google），或使用游客模式（数据仅保存在本地浏览器）"
-        )
-    
     target_list = get_user_watchlist_ref(app_state, final_email)
 
     
