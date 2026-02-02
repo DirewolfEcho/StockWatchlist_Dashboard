@@ -175,7 +175,7 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState<"today" | "yesterday">("today");
 
   // Get user identifier (email or name for GitHub users without email)
-  const userIdentifier = session?.user?.email || session?.user?.name;
+  const userIdentifier = session?.user?.email || session?.user?.name || null;
 
   useEffect(() => {
     if (status === "loading") return;
@@ -193,16 +193,21 @@ export default function Home() {
     try {
       if (status === "authenticated" && userIdentifier) {
         // Logged in: Fetch from server
+        console.log("Loading stocks for user:", userIdentifier);
         try {
           const s = await fetchStocks(userIdentifier);
+          console.log("Fetched stocks:", s);
           setStocks(s);
         } catch (err) {
           console.error("Fetch stocks failed", err);
         }
-      } else {
-        // Guest: Clear stocks (don't use localStorage anymore)
+      } else if (status === "unauthenticated") {
+        // Guest: Clear stocks
+        console.log("Guest mode - clearing stocks");
         setStocks([]);
       }
+      // If authenticated but no identifier, keep current stocks (don't clear)
+
       // Reports are always global for now (or could be filtered)
       loadReports();
     } catch (e) {
@@ -231,6 +236,7 @@ export default function Home() {
     };
 
     if (userIdentifier) {
+      console.log("Adding stock for user:", userIdentifier);
       // Logged in: Add to server
       // 1. Optimistic Add
       setStocks(prev => [tempStock, ...prev]);
@@ -238,6 +244,7 @@ export default function Home() {
       try {
         // 2. API Call - Get the confirmed stock object
         const confirmedStock = await addStock(symbol, market, userIdentifier);
+        console.log("Stock added successfully:", confirmedStock);
 
         // 3. Update state with real data (avoids race condition with fetchStocks)
         setStocks(prev => prev.map(s =>
@@ -245,9 +252,14 @@ export default function Home() {
         ));
       } catch (e: any) {
         // Rollback on error
+        console.error("Add stock failed:", e);
         setStocks(prev => prev.filter(s => s.symbol !== symbol || s.market !== market));
         alert(e.message || "添加股票出错");
       }
+    } else if (status === "authenticated") {
+      // Authenticated but no identifier - this shouldn't happen
+      alert("无法获取用户信息，请重新登录");
+      console.error("User authenticated but no identifier available. Session:", session);
     } else {
       // Guest: Show login prompt
       setIsGuestPromptOpen(true);

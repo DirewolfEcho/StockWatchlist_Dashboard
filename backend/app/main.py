@@ -135,7 +135,12 @@ def get_watchlist(response: Response, x_user_email: Optional[str] = Header(None)
     
     final_email = x_user_email or user_email
     response.headers["X-Debug-User"] = str(final_email)
-    return get_user_watchlist_ref(app_state, final_email)
+    
+    print(f"GET /stocks - User identifier: {final_email}")
+    result = get_user_watchlist_ref(app_state, final_email)
+    print(f"GET /stocks - Returning {len(result)} stocks for user: {final_email}")
+    
+    return result
 
 @app.post("/stocks", response_model=Stock)
 def add_stock(response: Response, stock_base: StockBase, x_user_email: Optional[str] = Header(None), user_email: Optional[str] = Query(None)):
@@ -145,7 +150,15 @@ def add_stock(response: Response, stock_base: StockBase, x_user_email: Optional[
     final_email = x_user_email or user_email
     response.headers["X-Debug-User"] = str(final_email)
     
+    print(f"POST /stocks - User identifier: {final_email}, Symbol: {stock_base.symbol}")
+    
+    if not final_email:
+        print("ERROR: No user identifier provided!")
+        raise HTTPException(status_code=401, detail="需要登录才能添加股票")
+    
     target_list = get_user_watchlist_ref(app_state, final_email)
+    print(f"POST /stocks - Current watchlist size for {final_email}: {len(target_list)}")
+
 
     
     symbol = stock_base.symbol.strip().upper()
@@ -180,7 +193,11 @@ def add_stock(response: Response, stock_base: StockBase, x_user_email: Optional[
     )
     
     target_list.append(new_stock)
+    print(f"POST /stocks - Stock appended. New watchlist size: {len(target_list)}")
+    
     save_data(app_state)
+    print(f"POST /stocks - Data saved. Returning stock: {new_stock.symbol}")
+    
     return new_stock
 
 # ... (get_chart)
