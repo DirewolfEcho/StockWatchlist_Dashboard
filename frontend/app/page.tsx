@@ -225,12 +225,19 @@ export default function Home() {
 
     if (session?.user?.email) {
       // Logged in: Add to server
+      // 1. Optimistic Add
       setStocks(prev => [tempStock, ...prev]);
       setNewSymbol("");
       try {
-        await addStock(symbol, market, session.user.email);
-        loadData();
+        // 2. API Call - Get the confirmed stock object
+        const confirmedStock = await addStock(symbol, market, session.user.email);
+
+        // 3. Update state with real data (avoids race condition with fetchStocks)
+        setStocks(prev => prev.map(s =>
+          (s.symbol === symbol && s.market === market) ? confirmedStock : s
+        ));
       } catch (e: any) {
+        // Rollback on error
         setStocks(prev => prev.filter(s => s.symbol !== symbol || s.market !== market));
         alert(e.message || "添加股票出错");
       }
