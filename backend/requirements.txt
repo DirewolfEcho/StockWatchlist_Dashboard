@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+akshare
+pandas
+apscheduler
+requests
+pydantic
+python-dotenv
+tavily-python
+openai
+google-genai
+yfinance
+tushare
