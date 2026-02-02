@@ -8,6 +8,6 @@ pydantic
 python-dotenv
 tavily-python
 openai
-google-genai
+google-generativeai
 yfinance
 tushare
