@@ -10,10 +10,14 @@ export const fetchStocks = async (email?: string | null) => {
     const headers: Record<string, string> = {};
     if (email) headers["X-User-Email"] = email;
 
-    const res = await fetch(`${API_URL}/stocks`, { headers });
+    const res = await fetch(`${API_URL}/stocks`, {
+        headers,
+        cache: "no-store",
+    });
     if (!res.ok) throw new Error("Failed to fetch stocks");
     return res.json();
 };
+
 
 
 export const addStock = async (symbol: string, market: string, email?: string | null) => {
