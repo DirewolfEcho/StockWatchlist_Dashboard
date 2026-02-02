@@ -161,7 +161,7 @@ const MiniChart = ({ symbol, market }: { symbol: string, market: string }) => {
 };
 
 export default function Home() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
 
@@ -174,19 +174,27 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState<"today" | "yesterday">("today");
 
   useEffect(() => {
+    if (status === "loading") return;
     loadData();
     // Poll for reports every 10 seconds just in case
     const interval = setInterval(loadReports, 10000);
     return () => clearInterval(interval);
-  }, [dateFilter, session]);
+  }, [dateFilter, session, status]); // Added status dependency
 
   // Load data logic handling both local and remote
   const loadData = async () => {
+    // Prevent loading data while session state is unknown
+    if (status === "loading") return;
+
     try {
-      if (session?.user?.email) {
+      if (status === "authenticated" && session?.user?.email) {
         // Logged in: Fetch from server
-        const s = await fetchStocks(session.user.email);
-        setStocks(s);
+        try {
+          const s = await fetchStocks(session.user.email);
+          setStocks(s);
+        } catch (err) {
+          console.error("Fetch stocks failed", err);
+        }
       } else {
         // Guest: Fetch from localStorage
         const stored = localStorage.getItem("guest_stocks");
