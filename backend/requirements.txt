@@ -8,6 +8,6 @@ pydantic
 python-dotenv
 tavily-python
 openai
-google-generativeai
+google-generativeai>=0.8.0
 yfinance
 tushare

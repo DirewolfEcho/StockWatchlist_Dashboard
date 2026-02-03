@@ -94,9 +94,9 @@ def generate_stock_report(symbol: str, market: str) -> AnalysisReport:
     
     
     models_to_try = [
-        'gemini-1.5-flash',          # Most reliable flash model
-        'gemini-1.5-flash-latest',   # Latest stable flash
-        'gemini-pro',                # Basic model (fallback)
+        'gemini-2.0-flash',         # Latest stable 2.0 flash model
+        'gemini-2.0-flash-lite',    # Lightweight 2.0 option
+        'gemini-1.5-flash-latest',  # Latest 1.5 flash
     ]
     
     last_error = "No models tried"
