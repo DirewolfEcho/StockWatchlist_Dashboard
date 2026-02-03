@@ -200,7 +200,16 @@ def add_stock(response: Response, stock_base: StockBase, x_user_email: Optional[
     
     return new_stock
 
-# ... (get_chart)
+@app.get("/stocks/{market}/{symbol}/chart")
+def get_chart(market: str, symbol: str):
+    """Get intraday chart data for a stock"""
+    from app.services.stock_data import get_intraday_chart
+    try:
+        chart_data = get_intraday_chart(symbol, market)
+        return chart_data
+    except Exception as e:
+        print(f"Error getting chart for {symbol} ({market}): {e}")
+        return []
 
 @app.delete("/stocks/{symbol}")
 def remove_stock(symbol: str, x_user_email: Optional[str] = Header(None), user_email: Optional[str] = Query(None)):
