@@ -236,6 +236,11 @@ export default function Home() {
 
   const loadReports = async () => {
     try {
+      // Don't load reports for guests - reports are per-user
+      if (status !== "authenticated" || !userIdentifier) {
+        setReports([]);
+        return;
+      }
       const r = await fetchReports(dateFilter);
       setReports(r);
     } catch (e) { console.error(e); }
@@ -506,209 +511,224 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-8">
-            {reports.map((report, idx) => {
-              let parsed: any = {};
-              let isJson = false;
-              try {
-                parsed = JSON.parse(report.report_content);
-                isJson = true;
-              } catch (e) { }
+          {/* Show login prompt for guests */}
+          {status !== "authenticated" ? (
+            <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-8 text-center">
+              <LogIn className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-300 mb-2">登录后查看分析报告</h3>
+              <p className="text-gray-500 text-sm mb-4">请登录以查看您的股票分析报告</p>
+              <button
+                onClick={() => setIsLoginModalOpen(true)}
+                className="bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-2 rounded-lg font-medium hover:opacity-90 transition"
+              >
+                立即登录
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-8">
+              {reports.map((report, idx) => {
+                let parsed: any = {};
+                let isJson = false;
+                try {
+                  parsed = JSON.parse(report.report_content);
+                  isJson = true;
+                } catch (e) { }
 
-              return (
-                <div key={idx} className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 hover:shadow-blue-900/10">
-                  {/* Report Header */}
-                  <div className="bg-gray-800/50 p-6 border-b border-gray-700 md:flex items-center justify-between gap-6">
-                    <div className="flex items-center gap-4 mb-4 md:mb-0">
-                      <div className={`p-4 rounded-2xl shadow-inner ${report.recommendation === 'BUY' ? 'bg-green-500/10' :
-                        report.recommendation === 'SELL' ? 'bg-red-500/10' : 'bg-yellow-500/10'
-                        }`}>
-                        <BarChart2 className={`w-8 h-8 ${report.recommendation === 'BUY' ? 'text-green-400' :
-                          report.recommendation === 'SELL' ? 'text-red-400' : 'text-yellow-400'
-                          }`} />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-3">
-                          <h3 className="text-3xl font-extrabold tracking-tight">{report.stock_symbol}</h3>
-                          {report.stock_name && report.stock_name !== report.stock_symbol && (
-                            <span className="text-xl text-blue-400 font-bold hidden sm:inline-block">
-                              {report.stock_name}
-                            </span>
-                          )}
-                          <div className={`px-4 py-1 rounded-full text-xs font-bold uppercase tracking-widest border ${report.recommendation === 'BUY' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
-                            report.recommendation === 'SELL' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
-                              'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                            }`}>
-                            {report.recommendation === 'BUY' ? '建议买入' :
-                              report.recommendation === 'SELL' ? '建议卖出' : '建议持有'}
-                          </div>
-                        </div>
-                        <p className="text-sm text-gray-500 mt-1 font-medium">
-                          报告生成: {new Date(report.generated_at).toLocaleString('zh-CN')}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-8 text-right bg-gray-900/40 p-4 rounded-xl border border-gray-700/50">
-                      <div>
-                        <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">当前行情</p>
-                        <p className="text-2xl font-mono font-bold text-white leading-none">
-                          {report.price ? `$${report.price.toFixed(2)}` : "N/A"}
-                        </p>
-                      </div>
-                      <div className="h-10 w-[1px] bg-gray-700"></div>
-                      <div>
-                        <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">风险评估</p>
-                        <div className={`text-lg font-bold leading-none ${parsed.risk_level === 'High' ? 'text-red-400' :
-                          parsed.risk_level === 'Medium' ? 'text-yellow-400' : 'text-green-400'
+                return (
+                  <div key={idx} className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 hover:shadow-blue-900/10">
+                    {/* Report Header */}
+                    <div className="bg-gray-800/50 p-6 border-b border-gray-700 md:flex items-center justify-between gap-6">
+                      <div className="flex items-center gap-4 mb-4 md:mb-0">
+                        <div className={`p-4 rounded-2xl shadow-inner ${report.recommendation === 'BUY' ? 'bg-green-500/10' :
+                          report.recommendation === 'SELL' ? 'bg-red-500/10' : 'bg-yellow-500/10'
                           }`}>
-                          {parsed.risk_level === 'High' ? '高风险' :
-                            parsed.risk_level === 'Medium' ? '中等风险' : '低风险'}
+                          <BarChart2 className={`w-8 h-8 ${report.recommendation === 'BUY' ? 'text-green-400' :
+                            report.recommendation === 'SELL' ? 'text-red-400' : 'text-yellow-400'
+                            }`} />
                         </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Report Content */}
-                  <div className="p-8 space-y-8">
-                    {isJson ? (
-                      <>
-                        {/* Summary Block */}
-                        <div className="relative">
-                          <div className="absolute -left-4 top-0 bottom-0 w-1 bg-blue-500 rounded-full"></div>
-                          <p className="text-xl font-medium text-gray-100 italic leading-relaxed pl-2">
-                            "{parsed.summary}"
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <h3 className="text-3xl font-extrabold tracking-tight">{report.stock_symbol}</h3>
+                            {report.stock_name && report.stock_name !== report.stock_symbol && (
+                              <span className="text-xl text-blue-400 font-bold hidden sm:inline-block">
+                                {report.stock_name}
+                              </span>
+                            )}
+                            <div className={`px-4 py-1 rounded-full text-xs font-bold uppercase tracking-widest border ${report.recommendation === 'BUY' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                              report.recommendation === 'SELL' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                                'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                              }`}>
+                              {report.recommendation === 'BUY' ? '建议买入' :
+                                report.recommendation === 'SELL' ? '建议卖出' : '建议持有'}
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1 font-medium">
+                            报告生成: {new Date(report.generated_at).toLocaleString('zh-CN')}
                           </p>
                         </div>
+                      </div>
 
-                        <div className="grid md:grid-cols-2 gap-8">
-                          {/* Left Column: Analysis Sections */}
-                          <div className="space-y-6">
-                            <div className="bg-gray-900/30 p-5 rounded-2xl border border-gray-700/50">
-                              <h4 className="text-blue-400 text-sm font-bold flex items-center gap-2 mb-3">
-                                <Activity className="w-4 h-4" /> 资金流向分析
-                              </h4>
-                              <p className="text-gray-300 text-sm leading-relaxed">
-                                {parsed.money_flow}
-                              </p>
-                            </div>
-                            <div className="bg-gray-900/30 p-5 rounded-2xl border border-gray-700/50">
-                              <h4 className="text-purple-400 text-sm font-bold flex items-center gap-2 mb-3">
-                                <BarChart2 className="w-4 h-4" /> 技术指标分析
-                              </h4>
-                              <p className="text-gray-300 text-sm leading-relaxed">
-                                {parsed.technical_analysis}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Right Column: Recommendations & Points */}
-                          <div className="space-y-6">
-                            <div className="bg-emerald-500/5 p-6 rounded-2xl border border-emerald-500/20">
-                              <h4 className="text-emerald-400 text-sm font-bold flex items-center gap-2 mb-4">
-                                <ArrowRight className="w-4 h-4" /> 买卖点位建议
-                              </h4>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-gray-900/60 p-3 rounded-xl border border-gray-700">
-                                  <span className="text-[10px] text-gray-500 block mb-1">建议买入</span>
-                                  <span className="text-green-400 font-bold">{parsed.trade_suggestions?.buy_point || "观察中"}</span>
-                                </div>
-                                <div className="bg-gray-900/60 p-3 rounded-xl border border-gray-700">
-                                  <span className="text-[10px] text-gray-500 block mb-1">建议卖出</span>
-                                  <span className="text-red-400 font-bold">{parsed.trade_suggestions?.sell_point || "观察中"}</span>
-                                </div>
-                                <div className="col-span-2 bg-gray-900/60 p-3 rounded-xl border border-gray-700 flex justify-between items-center">
-                                  <span className="text-[10px] text-gray-500 uppercase tracking-widest">止损参考</span>
-                                  <span className="text-orange-400 font-bold">{parsed.trade_suggestions?.stop_loss || "未设置"}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="bg-gray-900/30 p-5 rounded-2xl border border-gray-700/50">
-                              <h4 className="text-gray-400 text-sm font-bold flex items-center gap-2 mb-3">
-                                <CheckCircle className="w-4 h-4" /> 核心利好/风险点
-                              </h4>
-                              <ul className="space-y-2">
-                                {parsed.key_points?.map((point: string, i: number) => (
-                                  <li key={i} className="flex gap-2 text-xs text-gray-400">
-                                    <span className="text-blue-500 font-bold">•</span>
-                                    {point}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
+                      <div className="flex items-center gap-8 text-right bg-gray-900/40 p-4 rounded-xl border border-gray-700/50">
+                        <div>
+                          <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">当前行情</p>
+                          <p className="text-2xl font-mono font-bold text-white leading-none">
+                            {report.price ? `$${report.price.toFixed(2)}` : "N/A"}
+                          </p>
+                        </div>
+                        <div className="h-10 w-[1px] bg-gray-700"></div>
+                        <div>
+                          <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">风险评估</p>
+                          <div className={`text-lg font-bold leading-none ${parsed.risk_level === 'High' ? 'text-red-400' :
+                            parsed.risk_level === 'Medium' ? 'text-yellow-400' : 'text-green-400'
+                            }`}>
+                            {parsed.risk_level === 'High' ? '高风险' :
+                              parsed.risk_level === 'Medium' ? '中等风险' : '低风险'}
                           </div>
                         </div>
-
-                        {/* News Section */}
-                        {(
-                          <div className="mt-8 bg-gradient-to-br from-blue-500/5 to-purple-500/5 p-6 rounded-2xl border border-blue-500/20">
-                            <h4 className="text-blue-400 text-sm font-bold flex items-center gap-2 mb-4">
-                              <FileText className="w-4 h-4" /> 最新动态信息
-                            </h4>
-                            {report.news_items && report.news_items.length > 0 ? (
-                              <div className="space-y-3">
-                                {report.news_items.slice(0, 3).map((news, newsIdx) => {
-                                  const sentiment = news.sentiment || '中性';
-                                  const sentimentColor = sentiment === '正面' ? 'text-green-400 bg-green-500/10 border-green-500/30' :
-                                    sentiment === '负面' ? 'text-red-400 bg-red-500/10 border-red-500/30' :
-                                      'text-gray-400 bg-gray-500/10 border-gray-500/30';
-
-                                  return (
-                                    <div key={newsIdx} className="flex gap-3 items-start">
-                                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-                                        <span className="text-blue-400 text-xs font-bold">{newsIdx + 1}</span>
-                                      </div>
-                                      <div className="flex-1 space-y-2">
-                                        <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
-                                          {news.content}
-                                        </p>
-                                        {news.score && (
-                                          <div className="mt-2 w-full bg-gray-700/50 rounded-full h-1.5 overflow-hidden">
-                                            <div
-                                              className={`h-full rounded-full ${news.score >= 70 ? 'bg-green-500' : news.score >= 40 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                              style={{ width: `${news.score}%` }}
-                                            ></div>
-                                          </div>
-                                        )}
-                                        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border ${sentimentColor} mt-2`}>
-                                          {sentiment}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <div className="text-gray-500 text-sm italic py-4 text-center">
-                                暂无最新敏感动态信息 (可能是因为数据源限制或今日无重大新闻)
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {/* Investment Outlook Table */}
-                        <OutlookSection outlook={parsed.investment_outlook} />
-                      </>
-                    ) : (
-                      <div className="prose prose-invert max-w-none">
-                        <p className="whitespace-pre-wrap text-gray-300 leading-relaxed">{report.report_content}</p>
                       </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                    </div>
 
-            {reports.length === 0 && (
-              <div className="text-center py-24 bg-gray-800/30 rounded-3xl border-2 border-dashed border-gray-700">
-                <FileText className="w-16 h-16 text-gray-700 mx-auto mb-4" />
-                <p className="text-gray-500 text-xl font-medium">暂无深度分析报告</p>
-                <p className="text-gray-600 text-sm mt-2 max-w-xs mx-auto">
-                  添加您感兴趣的股票并点击上方按钮，AI 助手将为您生成专业的市场深度分析。
-                </p>
-              </div>
-            )}
-          </div>
+                    {/* Report Content */}
+                    <div className="p-8 space-y-8">
+                      {isJson ? (
+                        <>
+                          {/* Summary Block */}
+                          <div className="relative">
+                            <div className="absolute -left-4 top-0 bottom-0 w-1 bg-blue-500 rounded-full"></div>
+                            <p className="text-xl font-medium text-gray-100 italic leading-relaxed pl-2">
+                              "{parsed.summary}"
+                            </p>
+                          </div>
+
+                          <div className="grid md:grid-cols-2 gap-8">
+                            {/* Left Column: Analysis Sections */}
+                            <div className="space-y-6">
+                              <div className="bg-gray-900/30 p-5 rounded-2xl border border-gray-700/50">
+                                <h4 className="text-blue-400 text-sm font-bold flex items-center gap-2 mb-3">
+                                  <Activity className="w-4 h-4" /> 资金流向分析
+                                </h4>
+                                <p className="text-gray-300 text-sm leading-relaxed">
+                                  {parsed.money_flow}
+                                </p>
+                              </div>
+                              <div className="bg-gray-900/30 p-5 rounded-2xl border border-gray-700/50">
+                                <h4 className="text-purple-400 text-sm font-bold flex items-center gap-2 mb-3">
+                                  <BarChart2 className="w-4 h-4" /> 技术指标分析
+                                </h4>
+                                <p className="text-gray-300 text-sm leading-relaxed">
+                                  {parsed.technical_analysis}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Right Column: Recommendations & Points */}
+                            <div className="space-y-6">
+                              <div className="bg-emerald-500/5 p-6 rounded-2xl border border-emerald-500/20">
+                                <h4 className="text-emerald-400 text-sm font-bold flex items-center gap-2 mb-4">
+                                  <ArrowRight className="w-4 h-4" /> 买卖点位建议
+                                </h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="bg-gray-900/60 p-3 rounded-xl border border-gray-700">
+                                    <span className="text-[10px] text-gray-500 block mb-1">建议买入</span>
+                                    <span className="text-green-400 font-bold">{parsed.trade_suggestions?.buy_point || "观察中"}</span>
+                                  </div>
+                                  <div className="bg-gray-900/60 p-3 rounded-xl border border-gray-700">
+                                    <span className="text-[10px] text-gray-500 block mb-1">建议卖出</span>
+                                    <span className="text-red-400 font-bold">{parsed.trade_suggestions?.sell_point || "观察中"}</span>
+                                  </div>
+                                  <div className="col-span-2 bg-gray-900/60 p-3 rounded-xl border border-gray-700 flex justify-between items-center">
+                                    <span className="text-[10px] text-gray-500 uppercase tracking-widest">止损参考</span>
+                                    <span className="text-orange-400 font-bold">{parsed.trade_suggestions?.stop_loss || "未设置"}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="bg-gray-900/30 p-5 rounded-2xl border border-gray-700/50">
+                                <h4 className="text-gray-400 text-sm font-bold flex items-center gap-2 mb-3">
+                                  <CheckCircle className="w-4 h-4" /> 核心利好/风险点
+                                </h4>
+                                <ul className="space-y-2">
+                                  {parsed.key_points?.map((point: string, i: number) => (
+                                    <li key={i} className="flex gap-2 text-xs text-gray-400">
+                                      <span className="text-blue-500 font-bold">•</span>
+                                      {point}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* News Section */}
+                          {(
+                            <div className="mt-8 bg-gradient-to-br from-blue-500/5 to-purple-500/5 p-6 rounded-2xl border border-blue-500/20">
+                              <h4 className="text-blue-400 text-sm font-bold flex items-center gap-2 mb-4">
+                                <FileText className="w-4 h-4" /> 最新动态信息
+                              </h4>
+                              {report.news_items && report.news_items.length > 0 ? (
+                                <div className="space-y-3">
+                                  {report.news_items.slice(0, 3).map((news, newsIdx) => {
+                                    const sentiment = news.sentiment || '中性';
+                                    const sentimentColor = sentiment === '正面' ? 'text-green-400 bg-green-500/10 border-green-500/30' :
+                                      sentiment === '负面' ? 'text-red-400 bg-red-500/10 border-red-500/30' :
+                                        'text-gray-400 bg-gray-500/10 border-gray-500/30';
+
+                                    return (
+                                      <div key={newsIdx} className="flex gap-3 items-start">
+                                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+                                          <span className="text-blue-400 text-xs font-bold">{newsIdx + 1}</span>
+                                        </div>
+                                        <div className="flex-1 space-y-2">
+                                          <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+                                            {news.content}
+                                          </p>
+                                          {news.score && (
+                                            <div className="mt-2 w-full bg-gray-700/50 rounded-full h-1.5 overflow-hidden">
+                                              <div
+                                                className={`h-full rounded-full ${news.score >= 70 ? 'bg-green-500' : news.score >= 40 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                                style={{ width: `${news.score}%` }}
+                                              ></div>
+                                            </div>
+                                          )}
+                                          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border ${sentimentColor} mt-2`}>
+                                            {sentiment}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="text-gray-500 text-sm italic py-4 text-center">
+                                  暂无最新敏感动态信息 (可能是因为数据源限制或今日无重大新闻)
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {/* Investment Outlook Table */}
+                          <OutlookSection outlook={parsed.investment_outlook} />
+                        </>
+                      ) : (
+                        <div className="prose prose-invert max-w-none">
+                          <p className="whitespace-pre-wrap text-gray-300 leading-relaxed">{report.report_content}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {reports.length === 0 && (
+                <div className="text-center py-24 bg-gray-800/30 rounded-3xl border-2 border-dashed border-gray-700">
+                  <FileText className="w-16 h-16 text-gray-700 mx-auto mb-4" />
+                  <p className="text-gray-500 text-xl font-medium">暂无深度分析报告</p>
+                  <p className="text-gray-600 text-sm mt-2 max-w-xs mx-auto">
+                    添加您感兴趣的股票并点击上方按钮，AI 助手将为您生成专业的市场深度分析。
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       </div>
       {/* Login Modal */}
