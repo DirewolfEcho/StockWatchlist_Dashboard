@@ -96,7 +96,10 @@ def _translate_and_validate_news(title: str, content: str, symbol: str, stock_na
     try:
         import google.generativeai as genai
         
-        GEMINI_API_KEY = "AIzaSyCX11m_RJxcifuksECiB_krrf8IkntGQiQ"
+        import os
+        GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+        if not GEMINI_API_KEY:
+            return {"is_valid": True, "summary": ""}
         genai.configure(api_key=GEMINI_API_KEY)
         
         stock_identifier = f"{stock_name}({symbol})" if stock_name else symbol
@@ -279,7 +282,10 @@ def _generate_analyst_summary(news_context: str, symbol: str, stock_name: str = 
     try:
         import google.generativeai as genai
         
-        GEMINI_API_KEY = "AIzaSyCX11m_RJxcifuksECiB_krrf8IkntGQiQ"
+        import os
+        GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+        if not GEMINI_API_KEY:
+            return {"summary": "API key not configured"}
         genai.configure(api_key=GEMINI_API_KEY)
         
         stock_identifier = f"{stock_name}({symbol})" if stock_name else symbol
