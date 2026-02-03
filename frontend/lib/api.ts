@@ -1,4 +1,23 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// API URL Configuration with production safety checks
+const getApiUrl = () => {
+    const envUrl = process.env.NEXT_PUBLIC_API_URL;
+    const defaultUrl = "http://localhost:8000";
+
+    // In production (browser), never use localhost
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+        if (!envUrl || envUrl.includes('localhost')) {
+            console.error('⚠️ NEXT_PUBLIC_API_URL is not configured or points to localhost in production!');
+            console.error('Using fallback: https://stockwatchlist-dashboard.onrender.com');
+            return "https://stockwatchlist-dashboard.onrender.com";
+        }
+        return envUrl;
+    }
+
+    // In development or SSR, use env var or default to localhost
+    return envUrl || defaultUrl;
+};
+
+const API_URL = getApiUrl();
 
 const getHeaders = (email?: string | null) => {
     const headers: Record<string, string> = { "Content-Type": "application/json" };

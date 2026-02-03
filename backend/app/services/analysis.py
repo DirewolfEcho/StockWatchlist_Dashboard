@@ -115,21 +115,41 @@ def generate_stock_report(symbol: str, market: str) -> AnalysisReport:
                 recommendation = parsed_data.get("recommendation", "HOLD")
                 # Store the raw JSON string as content for the frontend to parse
                 report_content = cleaned_content
-            except json.JSONDecodeError:
-                print("Failed to parse JSON response. Falling back to raw text.")
-                recommendation = "Review" # Fallback
+            except json.JSONDecodeError as json_err:
+                print(f"Failed to parse JSON response: {json_err}")
+                print(f"Raw response: {cleaned_content[:500]}...")  # Log first 500 chars
+                recommendation = "ERROR"
+                report_content = json.dumps({
+                    "summary": "AI generated invalid response format. Please try again.",
+                    "recommendation": "ERROR",
+                    "error_details": f"JSON parse error: {str(json_err)}"
+                })
                 
             break # Success
         except Exception as e:
-            print(f"Failed with model {model_name}: {e}")
-            last_error = e
+            error_msg = str(e)
+            print(f"Failed with model {model_name}: {error_msg}")
+            last_error = error_msg
             continue
     else:
         # If loop finishes without break
         print(f"All models failed. Last error: {last_error}")
-        # Return a valid JSON error message
-        report_content = '{"summary": "Error generating analysis. Please try again.", "recommendation": "ERROR"}'
-        recommendation = "ERROR" # Set recommendation for error case
+        # Return a valid JSON error message with more details
+        import json
+        report_content = json.dumps({
+            "summary": "Error generating analysis. AI service may be temporarily unavailable.",
+            "recommendation": "ERROR",
+            "error_details": f"All AI models failed. Last error: {str(last_error)[:200]}",
+            "technical_analysis": "Unable to generate analysis",
+            "money_flow": "Unable to generate analysis",
+            "key_points": ["Please try again later", "AI service may be experiencing issues"],
+            "trade_suggestions": {
+                "buy_point": "N/A",
+                "sell_point": "N/A",
+                "stop_loss": "N/A"
+            }
+        })
+        recommendation = "ERROR"
 
     return AnalysisReport(
         stock_symbol=symbol,
