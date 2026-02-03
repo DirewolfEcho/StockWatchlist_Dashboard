@@ -92,10 +92,11 @@ def generate_stock_report(symbol: str, market: str) -> AnalysisReport:
     report_content = "LLM based analysis unavailable."
     recommendation = "HOLD"
     
+    
     models_to_try = [
-        'gemini-2.0-flash',
+        'gemini-2.0-flash-exp',
         'gemini-1.5-flash',
-        'gemini-1.5-pro',
+        'gemini-1.5-flash-8b',
     ]
     
     last_error = "No models tried"

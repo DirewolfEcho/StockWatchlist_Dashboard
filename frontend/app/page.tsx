@@ -122,7 +122,13 @@ const MiniChart = ({ symbol, market }: { symbol: string, market: string }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/stocks/${market}/${symbol}/chart`);
+        // Use env var or fallback to production API
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL ||
+          (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+            ? 'https://stockwatchlist-dashboard.onrender.com'
+            : 'http://localhost:8000');
+
+        const res = await fetch(`${apiUrl}/stocks/${market}/${symbol}/chart`);
         if (res.ok) {
           const json = await res.json();
           setData(json);
