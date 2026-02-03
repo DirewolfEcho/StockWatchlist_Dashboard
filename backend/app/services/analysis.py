@@ -1,12 +1,16 @@
 import google.generativeai as genai
+import os
 from .stock_data import get_latest_price, get_stock_history, get_stock_name
 from .news_data import get_stock_news
 from ..models import AnalysisReport
 from datetime import datetime
 
-# Initialize client if key exists
-GEMINI_API_KEY = "AIzaSyCX11m_RJxcifuksECiB_krrf8IkntGQiQ"
-genai.configure(api_key=GEMINI_API_KEY)
+# Initialize client from environment variable (NEVER hardcode API keys!)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+else:
+    print("WARNING: GEMINI_API_KEY not set in environment variables!")
 
 
 def generate_stock_report(symbol: str, market: str) -> AnalysisReport:
