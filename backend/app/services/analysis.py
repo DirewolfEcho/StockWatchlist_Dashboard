@@ -8,9 +8,10 @@ from datetime import datetime
 # Initialize client from environment variable (NEVER hardcode API keys!)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
+    print(f"DEBUG: Loaded API key starting with: {GEMINI_API_KEY[:10]}...")
     genai.configure(api_key=GEMINI_API_KEY)
 else:
-    print("WARNING: GEMINI_API_KEY not set in environment variables!")
+    print("ERROR: GEMINI_API_KEY not set in environment variables!")
 
 
 def generate_stock_report(symbol: str, market: str) -> AnalysisReport:
