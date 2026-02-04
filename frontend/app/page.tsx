@@ -411,10 +411,12 @@ export default function Home() {
                 >
                   <option value="HK">港股 (HK)</option>
                   <option value="US">美股 (US)</option>
+                  <option value="SH">A股沪市 (SH)</option>
+                  <option value="SZ">A股深市 (SZ)</option>
                 </select>
                 <input
                   type="text"
-                  placeholder="输入股票代码 (如 0700 或 AAPL)"
+                  placeholder="输入股票代码 (如 00700/AAPL/600519)"
                   value={newSymbol}
                   onChange={(e) => setNewSymbol(e.target.value)}
                   className="bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 flex-1 text-sm focus:border-blue-500 outline-none"

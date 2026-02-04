@@ -4,9 +4,10 @@ from typing import Dict, Any, Optional
 
 def get_latest_price(symbol: str, market: str) -> Optional[float]:
     """
-    Get latest price for US or HK stock.
+    Get latest price for US, HK, or A-share (SH/SZ) stock.
     Symbol for HK: e.g., '00700'
     Symbol for US: e.g., 'AAPL'
+    Symbol for A-share: e.g., '600519' (SH) or '000001' (SZ)
     """
     try:
         if market.upper() == 'HK':
@@ -50,6 +51,30 @@ def get_latest_price(symbol: str, market: str) -> Optional[float]:
                 return float(price)
             except Exception as e:
                 print(f"yfinance fallback failed for {symbol}: {e}")
+        
+        elif market.upper() in ['SH', 'SZ']:
+            # A股 (China mainland)
+            for attempt in range(3):
+                try:
+                    df = ak.stock_zh_a_spot_em()
+                    # 代码格式：600519 或 000001
+                    row = df[df['代码'] == symbol]
+                    if not row.empty:
+                        return float(row['最新价'].values[0])
+                    break
+                except Exception as e:
+                    print(f"Attempt {attempt+1} failed for A-share {symbol}: {e}")
+            
+            # Fallback to yfinance
+            try:
+                import yfinance as yf
+                # yfinance A股格式：600519.SS (上海) 或 000001.SZ (深圳)
+                suffix = '.SS' if market.upper() == 'SH' else '.SZ'
+                ticker = f"{symbol}{suffix}"
+                price = yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
+                return float(price)
+            except Exception as e:
+                print(f"yfinance fallback failed for A-share {symbol}: {e}")
                 
     except Exception as e:
         print(f"Error fetching price for {symbol}: {e}")
@@ -82,6 +107,14 @@ def get_stock_history(symbol: str, market: str) -> str:
                      history_df = ak.stock_us_hist(symbol=symbol)
                  except:
                      pass
+            elif market.upper() in ['SH', 'SZ']:
+                 # A股历史数据
+                 try:
+                     history_df = ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
+                     if history_df is not None and not history_df.empty:
+                         pass  # success
+                 except Exception as e:
+                     print(f"Akshare A-share history fetch failed: {e}")
 
         except Exception as e:
             print(f"Akshare history fetch failed: {e}")
@@ -93,6 +126,10 @@ def get_stock_history(symbol: str, market: str) -> str:
             if market.upper() == 'HK':
                 clean_symbol = symbol.replace('.HK', '').lstrip('0')
                 ticker = f"{clean_symbol.zfill(4)}.HK"
+            elif market.upper() in ['SH', 'SZ']:
+                # yfinance A股格式：600519.SS (上海) 或 000001.SZ (深圳)
+                suffix = '.SS' if market.upper() == 'SH' else '.SZ'
+                ticker = f"{symbol}{suffix}"
             
             stock = yf.Ticker(ticker)
             # Get 1 month to ensure we have enough for last 5 days
@@ -141,14 +178,35 @@ def get_money_flow_data(symbol: str, market: str) -> str:
                     return result
             except Exception as e:
                 print(f"Error fetching HK money flow from AKShare: {e}")
+        
+        elif market.upper() in ['SH', 'SZ']:
+            # A股资金流向数据
+            try:
+                df = ak.stock_individual_fund_flow(stock=symbol, market="sh" if market.upper() == 'SH' else "sz")
+                if df is not None and not df.empty:
+                    latest = df.iloc[-1]
+                    result = f"""资金流向数据 (A股):
+- 主力净流入: {latest.get('主力净流入-净额', 'N/A')}
+- 超大单净流入: {latest.get('超大单净流入-净额', 'N/A')}
+- 大单净流入: {latest.get('大单净流入-净额', 'N/A')}
+- 中单净流入: {latest.get('中单净流入-净额', 'N/A')}
+- 小单净流入: {latest.get('小单净流入-净额', 'N/A')}
+"""
+                    return result
+            except Exception as e:
+                print(f"Error fetching A-share money flow from AKShare: {e}")
                 
-        # Fallback: Use volume-based analysis for both HK and US
+        # Fallback: Use volume-based analysis for all markets
         try:
             import yfinance as yf
             ticker_symbol = symbol
             if market.upper() == 'HK':
                 clean_symbol = symbol.replace('.HK', '').lstrip('0')
                 ticker_symbol = f"{clean_symbol.zfill(4)}.HK"
+            elif market.upper() in ['SH', 'SZ']:
+                # yfinance A股格式
+                suffix = '.SS' if market.upper() == 'SH' else '.SZ'
+                ticker_symbol = f"{symbol}{suffix}"
             
             ticker = yf.Ticker(ticker_symbol)
             hist = ticker.history(period="5d")
@@ -173,7 +231,8 @@ def get_money_flow_data(symbol: str, market: str) -> str:
                         f"价格{price_direction} ({row['Close']:.2f})"
                     )
                 
-                market_label = "港股" if market.upper() == 'HK' else "美股"
+                market_labels = {'HK': '港股', 'US': '美股', 'SH': 'A股沪市', 'SZ': 'A股深市'}
+                market_label = market_labels.get(market.upper(), market)
                 result = f"""资金流向数据 ({market_label} - 基于成交量分析):
 {chr(10).join(volume_analysis)}
 
@@ -330,6 +389,10 @@ def get_stock_name(symbol: str, market: str) -> str:
             if market.upper() == 'HK':
                 clean_symbol = symbol.replace('.HK', '').lstrip('0')
                 ticker_symbol = f"{clean_symbol.zfill(4)}.HK"
+            elif market.upper() in ['SH', 'SZ']:
+                # yfinance A股格式：600519.SS (上海) 或 000001.SZ (深圳)
+                suffix = '.SS' if market.upper() == 'SH' else '.SZ'
+                ticker_symbol = f"{symbol}{suffix}"
             
             ticker = yf.Ticker(ticker_symbol)
             info = ticker.info
@@ -360,6 +423,12 @@ def get_intraday_chart(symbol: str, market: str) -> list:
         elif market.upper() == 'US':
             # AAPL -> usAAPL
             qt_symbol = f"us{symbol.upper()}"
+        elif market.upper() == 'SH':
+            # 600519 -> sh600519
+            qt_symbol = f"sh{symbol}"
+        elif market.upper() == 'SZ':
+            # 000001 -> sz000001
+            qt_symbol = f"sz{symbol}"
             
         # Tencent Minute Data API
         url = f"http://web.ifzq.gtimg.cn/appstock/app/minute/query?code={qt_symbol}"

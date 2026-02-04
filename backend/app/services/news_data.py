@@ -34,6 +34,8 @@ def get_stock_news(symbol: str, market: str, price_context: dict = None) -> List
                 query += " Hong Kong market"
             elif market == 'US':
                 query += " US market"
+            elif market.upper() in ['SH', 'SZ']:
+                query += " China A-share market 中国股市"
                 
             # Fetch more context for the analyst
             response = tavily.search(query=query, search_depth="advanced", max_results=10)
