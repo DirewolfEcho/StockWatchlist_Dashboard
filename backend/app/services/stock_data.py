@@ -267,6 +267,10 @@ def get_sina_stock_name(symbol: str, market: str) -> Optional[str]:
             s_symbol = f"hk{symbol.lstrip('0').zfill(5)}"
         elif market.upper() == 'US':
             s_symbol = f"gb_{symbol.lower()}"
+        elif market.upper() == 'SH':
+            s_symbol = f"sh{symbol}"
+        elif market.upper() == 'SZ':
+            s_symbol = f"sz{symbol}"
         else:
             return None
             
@@ -289,8 +293,10 @@ def get_sina_stock_name(symbol: str, market: str) -> Optional[str]:
 
 _cache_ts_hk_df = None
 _cache_ts_us_df = None
+_cache_ts_a_df = None  # A股缓存
 _cache_ts_hk_time = 0
 _cache_ts_us_time = 0
+_cache_ts_a_time = 0
 
 TUSHARE_TOKEN = "8308ccd2d6166e49e53836ed323384ba9d85f259798b6a928c91ca01"
 
@@ -299,7 +305,8 @@ def get_tushare_stock_name(symbol: str, market: str) -> Optional[str]:
     Fetch Chinese stock name from Tushare.
     """
     import time
-    global _cache_ts_hk_df, _cache_ts_us_df, _cache_ts_hk_time, _cache_ts_us_time
+    global _cache_ts_hk_df, _cache_ts_us_df, _cache_ts_a_df
+    global _cache_ts_hk_time, _cache_ts_us_time, _cache_ts_a_time
     now = time.time()
     CACHE_EXPIRY = 86400 # 24 hours for basic info
     
@@ -326,6 +333,18 @@ def get_tushare_stock_name(symbol: str, market: str) -> Optional[str]:
                 row = _cache_ts_us_df[_cache_ts_us_df['symbol'] == lookup]
                 if not row.empty:
                     return row['name'].values[0]
+        
+        elif market.upper() in ['SH', 'SZ']:
+            # A股股票名称
+            if _cache_ts_a_df is None or (now - _cache_ts_a_time) > CACHE_EXPIRY:
+                _cache_ts_a_df = pro.stock_basic(exchange='', list_status='L', fields='ts_code,symbol,name')
+                _cache_ts_a_time = now
+            if _cache_ts_a_df is not None:
+                # A股代码格式：600519 或 000001
+                row = _cache_ts_a_df[_cache_ts_a_df['symbol'] == symbol]
+                if not row.empty:
+                    return row['name'].values[0]
+                    
     except Exception as e:
         print(f"Tushare fetch failed for {symbol}: {e}")
     return None
@@ -340,6 +359,10 @@ def get_tencent_stock_name(symbol: str, market: str) -> Optional[str]:
             t_symbol = f"hk{symbol.lstrip('0').zfill(5)}"
         elif market.upper() == 'US':
             t_symbol = f"us{symbol.upper()}"
+        elif market.upper() == 'SH':
+            t_symbol = f"sh{symbol}"
+        elif market.upper() == 'SZ':
+            t_symbol = f"sz{symbol}"
         else:
             return None
             
