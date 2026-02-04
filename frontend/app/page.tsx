@@ -307,7 +307,7 @@ export default function Home() {
     e.preventDefault();
     try {
       await setTimer(timerTime);
-      alert(`Timer set to ${timerTime}`);
+      alert(`定时任务已设置为每日 ${timerTime} (香港时间) 自动运行`);
     } catch (e) {
       alert("Error setting timer");
     }
@@ -372,6 +372,7 @@ export default function Home() {
                 onChange={(e) => setTimerTime(e.target.value)}
                 className="bg-transparent border-none focus:ring-0 text-sm"
               />
+              <span className="text-xs text-gray-500">HKT</span>
               <button
                 onClick={handleSetTimer}
                 className="text-xs bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded transition"
