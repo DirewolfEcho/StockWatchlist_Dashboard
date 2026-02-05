@@ -241,7 +241,7 @@ export default function Home() {
         setReports([]);
         return;
       }
-      const r = await fetchReports(dateFilter);
+      const r = await fetchReports(dateFilter, userIdentifier);
       setReports(r);
     } catch (e) { console.error(e); }
   }

@@ -76,24 +76,39 @@ def run_analysis_job():
     today = datetime.now().date()
     yesterday = today - timedelta(days=1)
     
-    # Collect all unique stocks from all users + guest
-    unique_stocks = {}
-    
-    # helper
-    def add_stocks(s_list):
-        for s in s_list:
-            key = (s.symbol, s.market)
-            if key not in unique_stocks:
-                unique_stocks[key] = s
-                
-    add_stocks(app_state.watchlist)
-    for user_profile in app_state.users.values():
-        add_stocks(user_profile.watchlist)
+    # Process each user's watchlist separately
+    for user_email, user_profile in app_state.users.items():
+        print(f"Processing user: {user_email}")
         
-    for stock in unique_stocks.values():
-        print(f"Analyzing {stock.symbol}...")
+        for stock in user_profile.watchlist:
+            print(f"  Analyzing {stock.symbol} for {user_email}...")
+            try:
+                report = generate_stock_report(stock.symbol, stock.market)
+                report.user_id = user_email
+                
+                # Remove existing report for this stock from today for this user
+                user_profile.reports = [
+                    r for r in user_profile.reports 
+                    if not (r.stock_symbol == stock.symbol and r.generated_at.date() == today)
+                ]
+                
+                # Add new report to user's reports
+                user_profile.reports.insert(0, report)
+            except Exception as e:
+                print(f"  Analysis failed for {stock.symbol}: {e}")
+        
+        # Clean up: only keep reports from today and yesterday for this user
+        user_profile.reports = [
+            r for r in user_profile.reports
+            if r.generated_at.date() >= yesterday
+        ]
+    
+    # Also process guest/global watchlist (legacy support)
+    for stock in app_state.watchlist:
+        print(f"Analyzing {stock.symbol} (guest)...")
         try:
             report = generate_stock_report(stock.symbol, stock.market)
+            report.user_id = None  # Guest report
             
             # Remove existing report for this stock from today
             app_state.reports = [
@@ -106,7 +121,7 @@ def run_analysis_job():
         except Exception as e:
             print(f"Analysis failed for {stock.symbol}: {e}")
     
-    # Clean up: only keep reports from today and yesterday
+    # Clean up global reports
     app_state.reports = [
         r for r in app_state.reports
         if r.generated_at.date() >= yesterday
@@ -233,22 +248,30 @@ def remove_stock(symbol: str, x_user_email: Optional[str] = Header(None), user_e
 
 
 @app.get("/reports", response_model=List[AnalysisReport])
-def get_reports(date_filter: str = "today"):
+def get_reports(date_filter: str = "today", user_email: Optional[str] = None):
     """
-    Get reports filtered by date.
+    Get reports filtered by date and user.
     date_filter: 'today', 'yesterday', or 'all'
+    user_email: User email to filter reports for (if None, returns guest reports)
     """
     from datetime import timedelta
     
     today = datetime.now().date()
     yesterday = today - timedelta(days=1)
     
+    # Get user-specific reports if user_email provided
+    if user_email and user_email in app_state.users:
+        user_reports = app_state.users[user_email].reports
+    else:
+        # Return global/guest reports for non-logged-in users
+        user_reports = app_state.reports
+    
     if date_filter == "today":
-        filtered = [r for r in app_state.reports if r.generated_at.date() == today]
+        filtered = [r for r in user_reports if r.generated_at.date() == today]
     elif date_filter == "yesterday":
-        filtered = [r for r in app_state.reports if r.generated_at.date() == yesterday]
+        filtered = [r for r in user_reports if r.generated_at.date() == yesterday]
     else:  # 'all'
-        filtered = app_state.reports
+        filtered = user_reports
     
     # Return sorted by date desc
     return sorted(filtered, key=lambda x: x.generated_at, reverse=True)

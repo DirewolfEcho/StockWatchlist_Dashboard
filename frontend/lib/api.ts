@@ -73,9 +73,12 @@ export const removeStock = async (symbol: string, email?: string | null) => {
     return res.json();
 };
 
-export const fetchReports = async (dateFilter: string = "today") => {
-    // Reports are currently global
-    const res = await fetch(`${API_URL}/reports?date_filter=${dateFilter}`);
+export const fetchReports = async (dateFilter: string = "today", email?: string | null) => {
+    let url = `${API_URL}/reports?date_filter=${dateFilter}`;
+    if (email) {
+        url += `&user_email=${encodeURIComponent(email)}`;
+    }
+    const res = await fetch(url);
     if (!res.ok) throw new Error("Failed to fetch reports");
     return res.json();
 };

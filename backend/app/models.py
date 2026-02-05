@@ -26,10 +26,12 @@ class AnalysisReport(BaseModel):
     price: Optional[float] = None
     recommendation: Optional[str] = None # 'BUY', 'SELL', 'HOLD'
     news_items: List['NewsItem'] = []
+    user_id: Optional[str] = None  # User who owns this report
 
 # For persisting data simply in this MVP
 class UserProfile(BaseModel):
     watchlist: List[Stock] = []
+    reports: List[AnalysisReport] = []  # User-specific reports
 
 class AppState(BaseModel):
     # Global/Guest watchlist (legacy support)
@@ -39,4 +41,5 @@ class AppState(BaseModel):
     users: Dict[str, UserProfile] = {}
     
     timer: Optional[str] = "09:00"
+    # Keep global reports for backward compatibility, but prefer user-specific
     reports: List[AnalysisReport] = []
