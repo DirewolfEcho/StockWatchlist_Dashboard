@@ -22,39 +22,84 @@ app.add_middleware(
 
 DATA_FILE = "data.json"
 
-# In-memory retrieval with persistence
+# Import database service
+from app.services.database import (
+    save_app_state_to_db, 
+    load_app_state_from_db, 
+    is_supabase_configured
+)
+
+# In-memory retrieval with persistence (Supabase or local file)
 def load_data() -> AppState:
+    """Load app state from Supabase first, then fallback to local file."""
+    
+    # Try Supabase first
+    if is_supabase_configured():
+        db_data = load_app_state_from_db()
+        if db_data:
+            try:
+                data = json.loads(db_data)
+                # Parse datetimes
+                data = parse_datetimes(data)
+                print("✅ Loaded data from Supabase")
+                return AppState(**data)
+            except Exception as e:
+                print(f"Error parsing Supabase data: {e}")
+    
+    # Fallback to local file
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
             try:
                 data = json.load(f)
-                # Parse datetimes back (Global Watchlist)
-                for stock in data.get("watchlist", []):
-                    if isinstance(stock.get("added_at"), str):
-                        stock["added_at"] = datetime.fromisoformat(stock["added_at"])
-                
-                # Parse datetimes back (Users Watchlists)
-                if "users" in data and isinstance(data["users"], dict):
-                    for email, profile in data["users"].items():
-                        if "watchlist" in profile:
-                            for stock in profile["watchlist"]:
-                                if isinstance(stock.get("added_at"), str):
-                                    stock["added_at"] = datetime.fromisoformat(stock["added_at"])
-                                    
-                # Parse datetimes back (Reports)
-                for report in data.get("reports", []):
-                    if isinstance(report.get("generated_at"), str):
-                        report["generated_at"] = datetime.fromisoformat(report["generated_at"])
-                        
+                data = parse_datetimes(data)
+                print("📁 Loaded data from local file")
                 return AppState(**data)
             except Exception as e:
-                print(f"Error loading data: {e}")
+                print(f"Error loading local data: {e}")
                 return AppState()
+    
     return AppState()
 
+def parse_datetimes(data: dict) -> dict:
+    """Parse datetime strings back to datetime objects."""
+    # Global Watchlist
+    for stock in data.get("watchlist", []):
+        if isinstance(stock.get("added_at"), str):
+            stock["added_at"] = datetime.fromisoformat(stock["added_at"])
+    
+    # Users Watchlists and Reports
+    if "users" in data and isinstance(data["users"], dict):
+        for email, profile in data["users"].items():
+            if "watchlist" in profile:
+                for stock in profile["watchlist"]:
+                    if isinstance(stock.get("added_at"), str):
+                        stock["added_at"] = datetime.fromisoformat(stock["added_at"])
+            if "reports" in profile:
+                for report in profile["reports"]:
+                    if isinstance(report.get("generated_at"), str):
+                        report["generated_at"] = datetime.fromisoformat(report["generated_at"])
+    
+    # Global Reports
+    for report in data.get("reports", []):
+        if isinstance(report.get("generated_at"), str):
+            report["generated_at"] = datetime.fromisoformat(report["generated_at"])
+    
+    return data
+
 def save_data(state: AppState):
+    """Save app state to both Supabase and local file."""
+    state_json = state.model_dump_json()
+    
+    # Save to Supabase if configured
+    if is_supabase_configured():
+        if save_app_state_to_db(state_json):
+            print("✅ Saved to Supabase")
+        else:
+            print("⚠️ Supabase save failed, using local file only")
+    
+    # Always save to local file as backup
     with open(DATA_FILE, "w") as f:
-        f.write(state.model_dump_json())
+        f.write(state_json)
 
 app_state = load_data()
 
