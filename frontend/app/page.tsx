@@ -316,11 +316,46 @@ export default function Home() {
   const handleRunNow = async () => {
     setLoading(true);
     try {
+      // Remember current report count
+      const initialReportCount = reports.length;
+      const totalStocks = stocks.length;
+
       await triggerAnalysis();
-      alert("分析任务已在后台启动，请稍后刷新查看报告。");
+
+      // Actively poll for new reports every 5 seconds
+      // Analysis runs in background, so we need to keep checking
+      let pollCount = 0;
+      const maxPolls = totalStocks * 12; // ~60 seconds per stock max
+
+      const pollInterval = setInterval(async () => {
+        pollCount++;
+        try {
+          const r = await fetchReports(dateFilter, userIdentifier);
+          setReports(r);
+
+          // If we got all expected reports or hit max polls, stop
+          const newReportCount = r.length;
+          if (newReportCount >= totalStocks || pollCount >= maxPolls) {
+            clearInterval(pollInterval);
+            setLoading(false);
+            if (newReportCount >= totalStocks) {
+              console.log(`✅ All ${newReportCount} reports received`);
+            }
+          }
+        } catch (e) {
+          console.error("Poll error:", e);
+        }
+      }, 5000);
+
+      // Safety timeout - stop loading after 5 minutes max
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        setLoading(false);
+        loadReports(); // One final load
+      }, 300000);
+
     } catch (e) {
-      alert("启动失败");
-    } finally {
+      alert("启动分析失败");
       setLoading(false);
     }
   };
@@ -386,7 +421,7 @@ export default function Home() {
               className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 px-5 py-2.5 rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50 shadow-lg shadow-green-900/20"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? "分析中..." : "立即运行分析"}
+              {loading ? `分析中... (${reports.length}/${stocks.length})` : "立即运行分析"}
             </button>
           </div>
         </header>
