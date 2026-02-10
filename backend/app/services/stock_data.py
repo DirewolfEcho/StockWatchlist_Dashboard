@@ -1,173 +1,159 @@
 import akshare as ak
 import pandas as pd
+import time as _time
 from typing import Dict, Any, Optional
+
+def _yf_ticker(symbol: str, market: str) -> str:
+    """Convert symbol+market to yfinance ticker format."""
+    m = market.upper()
+    if m == 'HK':
+        clean = symbol.replace('.HK', '').lstrip('0')
+        return f"{clean.zfill(4)}.HK"
+    elif m == 'SH':
+        return f"{symbol}.SS"
+    elif m == 'SZ':
+        return f"{symbol}.SZ"
+    return symbol  # US stocks use symbol directly
 
 def get_latest_price(symbol: str, market: str) -> Optional[float]:
     """
     Get latest price for US, HK, or A-share (SH/SZ) stock.
-    Symbol for HK: e.g., '00700'
-    Symbol for US: e.g., 'AAPL'
-    Symbol for A-share: e.g., '600519' (SH) or '000001' (SZ)
+    Strategy: Try yfinance first (more stable on cloud servers),
+    then akshare as fallback.
     """
-    try:
-        if market.upper() == 'HK':
-            # Retry mechanism
-            for attempt in range(3):
-                try:
-                    df = ak.stock_hk_spot_em()
-                    row = df[df['代码'] == symbol]
-                    if not row.empty:
-                        return float(row['最新价'].values[0])
-                    break 
-                except Exception as e:
-                    print(f"Attempt {attempt+1} failed for {symbol}: {e}")
-                    if attempt == 2: pass # Fallback to None if all fail? Or keep silent for yfinance?
-            
-            # Fallback to yfinance if akshare failed
-            try:
-                import yfinance as yf
-                clean_symbol = symbol.replace('.HK', '').lstrip('0')
-                ticker = f"{clean_symbol.zfill(4)}.HK"
-                price = yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
-                return float(price)
-            except Exception as e:
-                print(f"yfinance fallback failed for {symbol}: {e}")
+    m = market.upper()
 
-        elif market.upper() == 'US':
-            for attempt in range(3):
-                try:
-                    df = ak.stock_us_spot_em()
-                    row = df[df['代码'] == symbol]
-                    if not row.empty:
-                        return float(row['最新价'].values[0])
-                    break
-                except Exception as e:
-                    print(f"Attempt {attempt+1} failed for {symbol}: {e}")
-            
-            # Fallback to yfinance
-            try:
-                import yfinance as yf
-                price = yf.Ticker(symbol).history(period="1d")['Close'].iloc[-1]
-                return float(price)
-            except Exception as e:
-                print(f"yfinance fallback failed for {symbol}: {e}")
-        
-        elif market.upper() in ['SH', 'SZ']:
-            # A股 (China mainland)
-            for attempt in range(3):
-                try:
-                    df = ak.stock_zh_a_spot_em()
-                    # 代码格式：600519 或 000001
-                    row = df[df['代码'] == symbol]
-                    if not row.empty:
-                        return float(row['最新价'].values[0])
-                    break
-                except Exception as e:
-                    print(f"Attempt {attempt+1} failed for A-share {symbol}: {e}")
-            
-            # Fallback to yfinance
-            try:
-                import yfinance as yf
-                # yfinance A股格式：600519.SS (上海) 或 000001.SZ (深圳)
-                suffix = '.SS' if market.upper() == 'SH' else '.SZ'
-                ticker = f"{symbol}{suffix}"
-                price = yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
-                return float(price)
-            except Exception as e:
-                print(f"yfinance fallback failed for A-share {symbol}: {e}")
-                
+    # --- Strategy 1: yfinance (stable, works on Render) ---
+    try:
+        import yfinance as yf
+        ticker = _yf_ticker(symbol, market)
+        hist = yf.Ticker(ticker).history(period="1d")
+        if hist is not None and not hist.empty:
+            price = float(hist['Close'].iloc[-1])
+            print(f"  ✅ yfinance price for {symbol}: {price}")
+            return price
     except Exception as e:
-        print(f"Error fetching price for {symbol}: {e}")
-        return None
+        print(f"  yfinance failed for {symbol}: {e}")
+
+    # --- Strategy 2: akshare (may fail on cloud due to connection issues) ---
+    try:
+        _time.sleep(1)  # Brief pause before akshare to avoid rate limits
+        if m == 'HK':
+            df = ak.stock_hk_spot_em()
+            row = df[df['代码'] == symbol]
+            if not row.empty:
+                return float(row['最新价'].values[0])
+        elif m == 'US':
+            df = ak.stock_us_spot_em()
+            row = df[df['代码'] == symbol]
+            if not row.empty:
+                return float(row['最新价'].values[0])
+        elif m in ['SH', 'SZ']:
+            df = ak.stock_zh_a_spot_em()
+            row = df[df['代码'] == symbol]
+            if not row.empty:
+                return float(row['最新价'].values[0])
+    except Exception as e:
+        print(f"  akshare fallback failed for {symbol}: {e}")
+
+    print(f"  ⚠️ All price sources failed for {symbol}")
     return None
 
 def get_stock_history(symbol: str, market: str) -> str:
     """
     Get recent history summary string for analysis.
+    Strategy: yfinance first (stable), akshare as fallback.
     """
+    # --- Strategy 1: yfinance ---
     try:
         import yfinance as yf
+        ticker = _yf_ticker(symbol, market)
+        stock = yf.Ticker(ticker)
+        history_df = stock.history(period="1mo")
         
-        history_df = None
-        
-        # Try Akshare first (giving it a chance but knowing it's unstable)
-        try:
-            if market.upper() == 'HK':
-                # Akshare HK
-                 for attempt in range(3):
-                    try:
-                        history_df = ak.stock_hk_daily(symbol=symbol, adjust="qfq")
-                        if history_df is not None and not history_df.empty:
-                            break
-                    except:
-                        pass
-            elif market.upper() == 'US':
-                 # Akshare US often unstable for hist, try once
-                 try:
-                     history_df = ak.stock_us_hist(symbol=symbol)
-                 except:
-                     pass
-            elif market.upper() in ['SH', 'SZ']:
-                 # A股历史数据
-                 try:
-                     history_df = ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
-                     if history_df is not None and not history_df.empty:
-                         pass  # success
-                 except Exception as e:
-                     print(f"Akshare A-share history fetch failed: {e}")
-
-        except Exception as e:
-            print(f"Akshare history fetch failed: {e}")
-
-        # Fallback to yfinance if akshare didn't return data
-        if history_df is None or history_df.empty:
-            print(f"Falling back to yfinance for history: {symbol}")
-            ticker = symbol
-            if market.upper() == 'HK':
-                clean_symbol = symbol.replace('.HK', '').lstrip('0')
-                ticker = f"{clean_symbol.zfill(4)}.HK"
-            elif market.upper() in ['SH', 'SZ']:
-                # yfinance A股格式：600519.SS (上海) 或 000001.SZ (深圳)
-                suffix = '.SS' if market.upper() == 'SH' else '.SZ'
-                ticker = f"{symbol}{suffix}"
-            
-            stock = yf.Ticker(ticker)
-            # Get 1 month to ensure we have enough for last 5 days
-            history_df = stock.history(period="1mo")
-            
-            # Format yfinance df to string similar to what we want
-            if not history_df.empty:
-                # Keep only Close, Volume, etc?
-                # Just last 5 rows
-                recent = history_df.tail(5)
-                return recent.to_string()
-
         if history_df is not None and not history_df.empty:
-             recent = history_df.tail(5)
-             return recent.to_string()
-        
-        return "No historical data available."
-
+            recent = history_df.tail(5)
+            print(f"  ✅ yfinance history for {symbol}: {len(recent)} days")
+            return recent.to_string()
     except Exception as e:
-        return f"Error fetching history: {e}"
+        print(f"  yfinance history failed for {symbol}: {e}")
+
+    # --- Strategy 2: akshare fallback ---
+    try:
+        _time.sleep(1)
+        history_df = None
+        m = market.upper()
+        if m == 'HK':
+            history_df = ak.stock_hk_daily(symbol=symbol, adjust="qfq")
+        elif m == 'US':
+            history_df = ak.stock_us_hist(symbol=symbol)
+        elif m in ['SH', 'SZ']:
+            history_df = ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
+        
+        if history_df is not None and not history_df.empty:
+            recent = history_df.tail(5)
+            return recent.to_string()
+    except Exception as e:
+        print(f"  akshare history fallback failed for {symbol}: {e}")
+    
+    return "No historical data available."
 
 def get_money_flow_data(symbol: str, market: str) -> str:
     """
     Get daily money flow data, including overall and main force flows with volume analysis.
-    Returns formatted string with money flow analysis data.
+    Strategy: yfinance volume analysis first (stable), akshare money flow as enhancement.
     """
+    m = market.upper()
+
+    # --- Strategy 1: yfinance volume analysis (reliable) ---
+    yf_result = None
     try:
-        if market.upper() == 'HK':
-            # For HK stocks, try to get money flow data from AKShare
-            try:
-                clean_symbol = symbol.lstrip('0')
-                df = ak.stock_individual_fund_flow_rank(indicator="今日")
-                hk_symbol = f"{clean_symbol.zfill(5)}"
-                matching_rows = df[df['代码'].astype(str).str.contains(hk_symbol, na=False)]
+        import yfinance as yf
+        ticker = _yf_ticker(symbol, market)
+        hist = yf.Ticker(ticker).history(period="5d")
+        
+        if hist is not None and not hist.empty:
+            recent = hist.tail(5)
+            volume_analysis = []
+            
+            for idx, (date, row) in enumerate(recent.iterrows()):
+                volume_change = ""
+                if idx > 0:
+                    prev_volume = recent.iloc[idx-1]['Volume']
+                    curr_volume = row['Volume']
+                    change_pct = ((curr_volume - prev_volume) / prev_volume * 100) if prev_volume > 0 else 0
+                    volume_change = f" (较前日{'+' if change_pct > 0 else ''}{change_pct:.1f}%)"
                 
-                if not matching_rows.empty:
-                    row = matching_rows.iloc[0]
-                    result = f"""资金流向数据 (港股):
+                price_change = row['Close'] - row['Open']
+                price_direction = "上涨" if price_change > 0 else "下跌" if price_change < 0 else "平盘"
+                
+                volume_analysis.append(
+                    f"- {date.strftime('%Y-%m-%d')}: 成交量 {int(row['Volume']):,}{volume_change}, "
+                    f"价格{price_direction} ({row['Close']:.2f})"
+                )
+            
+            market_labels = {'HK': '港股', 'US': '美股', 'SH': 'A股沪市', 'SZ': 'A股深市'}
+            market_label = market_labels.get(m, market)
+            yf_result = f"""资金流向数据 ({market_label} - 基于成交量分析):
+{chr(10).join(volume_analysis)}
+
+注: 数据基于成交量变化分析，结合价格走势判断资金流向趋势。
+"""
+    except Exception as e:
+        print(f"  yfinance money flow failed for {symbol}: {e}")
+
+    # --- Strategy 2: Try akshare for detailed money flow (enhancement) ---
+    try:
+        _time.sleep(0.5)
+        if m == 'HK':
+            clean_symbol = symbol.lstrip('0')
+            df = ak.stock_individual_fund_flow_rank(indicator="今日")
+            hk_symbol = f"{clean_symbol.zfill(5)}"
+            matching_rows = df[df['代码'].astype(str).str.contains(hk_symbol, na=False)]
+            
+            if not matching_rows.empty:
+                row = matching_rows.iloc[0]
+                return f"""资金流向数据 (港股):
 - 主力净流入: {row.get('主力净流入', 'N/A')}
 - 超大单净流入: {row.get('超大单净流入', 'N/A')}
 - 大单净流入: {row.get('大单净流入', 'N/A')}
@@ -175,78 +161,25 @@ def get_money_flow_data(symbol: str, market: str) -> str:
 - 小单净流入: {row.get('小单净流入', 'N/A')}
 - 主力净占比: {row.get('主力净占比', 'N/A')}
 """
-                    return result
-            except Exception as e:
-                print(f"Error fetching HK money flow from AKShare: {e}")
-        
-        elif market.upper() in ['SH', 'SZ']:
-            # A股资金流向数据
-            try:
-                df = ak.stock_individual_fund_flow(stock=symbol, market="sh" if market.upper() == 'SH' else "sz")
-                if df is not None and not df.empty:
-                    latest = df.iloc[-1]
-                    result = f"""资金流向数据 (A股):
+        elif m in ['SH', 'SZ']:
+            df = ak.stock_individual_fund_flow(stock=symbol, market="sh" if m == 'SH' else "sz")
+            if df is not None and not df.empty:
+                latest = df.iloc[-1]
+                return f"""资金流向数据 (A股):
 - 主力净流入: {latest.get('主力净流入-净额', 'N/A')}
 - 超大单净流入: {latest.get('超大单净流入-净额', 'N/A')}
 - 大单净流入: {latest.get('大单净流入-净额', 'N/A')}
 - 中单净流入: {latest.get('中单净流入-净额', 'N/A')}
 - 小单净流入: {latest.get('小单净流入-净额', 'N/A')}
 """
-                    return result
-            except Exception as e:
-                print(f"Error fetching A-share money flow from AKShare: {e}")
-                
-        # Fallback: Use volume-based analysis for all markets
-        try:
-            import yfinance as yf
-            ticker_symbol = symbol
-            if market.upper() == 'HK':
-                clean_symbol = symbol.replace('.HK', '').lstrip('0')
-                ticker_symbol = f"{clean_symbol.zfill(4)}.HK"
-            elif market.upper() in ['SH', 'SZ']:
-                # yfinance A股格式
-                suffix = '.SS' if market.upper() == 'SH' else '.SZ'
-                ticker_symbol = f"{symbol}{suffix}"
-            
-            ticker = yf.Ticker(ticker_symbol)
-            hist = ticker.history(period="5d")
-            
-            if not hist.empty:
-                recent = hist.tail(5)
-                volume_analysis = []
-                
-                for idx, (date, row) in enumerate(recent.iterrows()):
-                    volume_change = ""
-                    if idx > 0:
-                        prev_volume = recent.iloc[idx-1]['Volume']
-                        curr_volume = row['Volume']
-                        change_pct = ((curr_volume - prev_volume) / prev_volume * 100) if prev_volume > 0 else 0
-                        volume_change = f" (较前日{'+' if change_pct > 0 else ''}{change_pct:.1f}%)"
-                    
-                    price_change = row['Close'] - row['Open']
-                    price_direction = "上涨" if price_change > 0 else "下跌" if price_change < 0 else "平盘"
-                    
-                    volume_analysis.append(
-                        f"- {date.strftime('%Y-%m-%d')}: 成交量 {int(row['Volume']):,}{volume_change}, "
-                        f"价格{price_direction} ({row['Close']:.2f})"
-                    )
-                
-                market_labels = {'HK': '港股', 'US': '美股', 'SH': 'A股沪市', 'SZ': 'A股深市'}
-                market_label = market_labels.get(market.upper(), market)
-                result = f"""资金流向数据 ({market_label} - 基于成交量分析):
-{chr(10).join(volume_analysis)}
-
-注: 数据基于成交量变化分析，结合价格走势判断资金流向趋势。
-"""
-                return result
-        except Exception as e:
-            print(f"Error fetching volume data: {e}")
-            
-        return "资金流向数据暂时无法获取，将基于历史价格进行综合分析。"
-                
     except Exception as e:
-        print(f"Error in get_money_flow_data: {e}")
-        return "资金流向数据获取失败，将基于历史价格和成交量进行综合分析。"
+        print(f"  akshare money flow failed for {symbol}: {e}")
+
+    # Return yfinance result if akshare didn't provide detailed data
+    if yf_result:
+        return yf_result
+    
+    return "资金流向数据暂时无法获取，将基于历史价格进行综合分析。"
 
 # Caching for stock names
 _cache_hk_df = None
@@ -408,15 +341,7 @@ def get_stock_name(symbol: str, market: str) -> str:
         # 4. Fallback to yfinance (Usually English)
         try:
             import yfinance as yf
-            ticker_symbol = symbol
-            if market.upper() == 'HK':
-                clean_symbol = symbol.replace('.HK', '').lstrip('0')
-                ticker_symbol = f"{clean_symbol.zfill(4)}.HK"
-            elif market.upper() in ['SH', 'SZ']:
-                # yfinance A股格式：600519.SS (上海) 或 000001.SZ (深圳)
-                suffix = '.SS' if market.upper() == 'SH' else '.SZ'
-                ticker_symbol = f"{symbol}{suffix}"
-            
+            ticker_symbol = _yf_ticker(symbol, market)
             ticker = yf.Ticker(ticker_symbol)
             info = ticker.info
             name = info.get('shortName') or info.get('longName')

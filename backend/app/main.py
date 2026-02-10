@@ -115,6 +115,7 @@ def get_user_watchlist_ref(app_state: AppState, user_email: Optional[str]) -> Li
 
 # --- Job Function ---
 def run_analysis_job():
+    import time as job_time
     print("Running analysis job...")
     from datetime import timedelta
     
@@ -125,8 +126,8 @@ def run_analysis_job():
     for user_email, user_profile in app_state.users.items():
         print(f"Processing user: {user_email}")
         
-        for stock in user_profile.watchlist:
-            print(f"  Analyzing {stock.symbol} for {user_email}...")
+        for i, stock in enumerate(user_profile.watchlist):
+            print(f"  [{i+1}/{len(user_profile.watchlist)}] Analyzing {stock.symbol} for {user_email}...")
             try:
                 report = generate_stock_report(stock.symbol, stock.market)
                 report.user_id = user_email
@@ -139,8 +140,17 @@ def run_analysis_job():
                 
                 # Add new report to user's reports
                 user_profile.reports.insert(0, report)
+                print(f"  ✅ Report generated for {stock.symbol}")
+                
+                # Save after each report to prevent data loss  
+                save_data(app_state)
+                
             except Exception as e:
-                print(f"  Analysis failed for {stock.symbol}: {e}")
+                print(f"  ❌ Analysis failed for {stock.symbol}: {e}")
+            
+            # Brief delay between stocks to avoid API rate limits
+            if i < len(user_profile.watchlist) - 1:
+                job_time.sleep(3)
         
         # Clean up: only keep reports from today and yesterday for this user
         user_profile.reports = [
@@ -149,7 +159,7 @@ def run_analysis_job():
         ]
     
     # Also process guest/global watchlist (legacy support)
-    for stock in app_state.watchlist:
+    for i, stock in enumerate(app_state.watchlist):
         print(f"Analyzing {stock.symbol} (guest)...")
         try:
             report = generate_stock_report(stock.symbol, stock.market)
@@ -163,8 +173,12 @@ def run_analysis_job():
             
             # Add new report
             app_state.reports.insert(0, report)
+            save_data(app_state)
         except Exception as e:
             print(f"Analysis failed for {stock.symbol}: {e}")
+        
+        if i < len(app_state.watchlist) - 1:
+            job_time.sleep(3)
     
     # Clean up global reports
     app_state.reports = [
@@ -173,7 +187,7 @@ def run_analysis_job():
     ]
     
     save_data(app_state)
-    print("Analysis job finished.")
+    print("✅ Analysis job finished.")
 
 # --- Routes ---
 
